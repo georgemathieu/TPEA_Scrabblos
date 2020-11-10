@@ -1,29 +1,8 @@
-*.annot
-*.cmo
-*.cma
-*.cmi
-*.a
-*.o
-*.cmx
-*.cmxs
-*.cmxa
-
-# ocamlbuild working directory
-_build/
-
-# ocamlbuild targets
-*.byte
-*.native
-
-# oasis generated files
-setup.data
-setup.log
-
-# Merlin configuring file for Vim and Emacs
+dune-project
 .merlin
-
-# Dune generated files
+*~
+_build/
 *.install
-
-# Local OPAM switch
-_opam/
+scrabblos-client
+scrabblos-proxy
+scrabblos-server
