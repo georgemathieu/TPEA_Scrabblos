@@ -1,6 +1,7 @@
 (* open Messages *)
 open Word
 open Crypto
+open Letter
 
 type politician = { sk : Crypto.sk; pk : Crypto.pk } [@@deriving yojson, show]
 
@@ -11,39 +12,71 @@ type state = {
   next_words : word list;
 }
 
+let make ~(pk : Crypto.pk) ~(sk : Crypto.sk) ~(word : letter list) ~(head : hash) ~(level : int)  =
+  (* Build politcian *)
+  let politician = {sk ; pk} in
+  (* Create message *)
+  let msg = Word.pre_bigstring ~word ~level ~head ~pk in
+  (* Build signature *)
+  let signature = Crypto.sign ~sk ~msg in
+  {word ; Word.level ; head ; politician=pk ; signature}
+
+
 let make_word_on_hash level letters politician head_hash : word =
   let head = head_hash in
-  Word.make ~word:letters ~level ~pk:politician.pk ~sk:politician.sk ~head
+  make ~word:letters ~level ~pk:politician.pk ~sk:politician.sk ~head
 
 let make_word_on_blockletters level letters politician head : word =
-  let head_hash = hash head in
+  let head_hash = Crypto.hash head in
   make_word_on_hash level letters politician head_hash
 
 let send_new_word st level =
-  let _ = st in
-  let _ = level in
   (* generate a word above the blockchain head, with the adequate letters *)
   (* then send it to the server *)
-  failwith ("à programmer" ^ __LOC__)
+  Option.iter
+    (fun head ->
+      let lettersFromStore = Store.get_letters st.letter_store head in
+      let word = make_word_on_blockletters level lettersFromStore st.politician (Crypto.hash_to_bigstring head) in
+      let message = Messages.Inject_word word in
+      Client_utils.send_some message)
+    (Consensus.head ~level:(level - 1) st.word_store) (* typing error ? *)
+  
+  
 
 let run ?(max_iter = 0) () =
-  (* ignoring unused variables - to be removed *)
-  ignore max_iter ;
-
-  (* end ignoring unused variables - to be removed *)
-
   (* Generate public/secret keys *)
-  Log.log_warn "TODO" ;
+  let (pk, sk) = Crypto.genkeys () in
+
   (* Get initial wordpool *)
-  Log.log_warn "TODO" ;
+  let getpool = Messages.Get_full_wordpool in
+    Client_utils.send_some getpool ;
+  let wordpool =
+    match Client_utils.receive () with
+    | Messages.Full_wordpool wordpool -> wordpool
+    | _ -> assert false
+  in
+
   (* Generate initial blocktree *)
-  Log.log_warn "TODO" ;
+  let store = Store.init_words () in
+    Store.add_words store wordpool.words ;
+
   (* Get initial letterpool *)
-  Log.log_warn "TODO" ;
+  let getlpool = Messages.Get_full_letterpool in
+    Client_utils.send_some getlpool ;
+  let lpool =
+    match Client_utils.receive () with
+      | Messages.Full_letterpool letterpool -> letterpool
+      | _ -> assert false
+  in
+
   (* Generate initial letterpool *)
-  Log.log_warn "TODO" ;
+  let lStore = Store.init_letters () in
+    Store.add_letters lStore lpool.letters ;
+
   (* Create and send first word *)
-  Log.log_warn "TODO" ;
+  let pol = {sk ; pk} in
+  let state = {pol ; store ; lStore ; next_words=[]} in
+  
   (* start listening to server messages *)
   Log.log_warn "TODO" ;
   (*  main loop *)

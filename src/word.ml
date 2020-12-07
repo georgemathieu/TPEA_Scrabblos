@@ -13,7 +13,7 @@ type word = {
 
 type t = word [@@deriving yojson, show]
 
-let pre_bigstring ~word ~level ~head ~politician =
+let pre_bigstring ~word ~level ~head ~pk =
   let open Crypto in
   let buf =
     Bigstring.concat
@@ -22,13 +22,14 @@ let pre_bigstring ~word ~level ~head ~politician =
       @ [
           hash_to_bigstring head;
           Utils.bigstring_of_int level;
-          pk_to_bigstring politician;
+          pk_to_bigstring pk;
         ] )
   in
   buf
 
 let pre_to_bigstring { word; level; head; politician; signature = _ } =
-  pre_bigstring ~word ~level ~head ~politician
+  let pk = politician in
+  pre_bigstring ~word ~level ~head ~pk
 
 let to_bigstring ({ signature; _ } as w) =
   let open Crypto in
@@ -44,16 +45,5 @@ let check_signature w =
     ~pk:w.politician
     ~msg:(pre_to_bigstring w)
     ~signature:w.signature
-
-let make ~(word : letter list) ~(head : hash) ~(level : int) ~(pk : Crypto.pk)
-    ~(sk : Crypto.sk) =
-  (* ignoring unused variables - to be removed *)
-  ignore word ;
-  ignore head ;
-  ignore level ;
-  ignore pk ;
-  ignore sk ;
-  (* end ignoring unused variables - to be removed *)
-  failwith ("à programmer" ^ __LOC__)
 
 let hash word = Crypto.hash (to_bigstring word)
