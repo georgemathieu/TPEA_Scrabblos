@@ -86,6 +86,6 @@ let _ =
   let main =
     Random.self_init () ;
     let () = Client_utils.connect () in
-    run ~max_iter:(-1) ()
+    run ~max_iter:(20) ()
   in
   main
