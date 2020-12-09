@@ -45,6 +45,8 @@ let run ?(max_iter = 0) () =
   (* Generate public/secret keys *)
   let (pk, sk) = Crypto.genkeys () in
 
+  Log.log_info "POLITICIEN TEST" ;
+
   (* Get initial wordpool *)
   let getpool = Messages.Get_full_wordpool in
     Client_utils.send_some getpool ;
@@ -84,17 +86,17 @@ let run ?(max_iter = 0) () =
     if max_iter = 0 then ()
     else (
       ( match Client_utils.receive () with
-      | Messages.Inject_letter l ->
-          Store.add_letter lStore l ;
+      | Messages.Inject_word w ->
+          Store.add_word wStore w ;
           Option.iter
             (fun head ->
-              if head = l then (
+              if head = w then (
                 Log.log_info "Head updated to incoming word %a@." Word.pp w ;
-                send_new_word state !level  )
+                send_new_word state !level )
               else Log.log_info "incoming word %a not a new head@." Word.pp w)
-            (Consensus.head ~level:(!level - 1) store)
+            (Consensus.head ~level:(!level - 1) wStore)
       | Messages.Next_turn p -> level := p
-      | Messages.Inject_word _ | _ -> () ) ;
+      | Messages.Inject_letter _ | _ -> () ) ;
       loop (max_iter - 1) )
   in
   loop max_iter

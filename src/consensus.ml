@@ -2,9 +2,6 @@ open Word
 open Constants
 open Letter
 
-
-let _ = ignore genesis
-
 (* English rules *)
 let lettre_score l : int =
   match l.letter with
@@ -57,14 +54,19 @@ let fitness st word =
 
 (* TODO *)
 
-let rec headAux (words : word list) (meilleurScore : int) (meilleurMot : word option) : word option = 
+let rec headAux (level:int) (words : word list) (meilleurScore : int) (meilleurMot : word option) : word option = 
   match words with
   | [] -> meilleurMot
   | (x::xs) -> let newScore = word_score x in
-              if (word_score x) > meilleurScore then headAux xs newScore (Some x)
-                                                else headAux xs meilleurScore meilleurMot
+               if (level = x.level) && ((word_score x) > meilleurScore) 
+                          then headAux level xs newScore (Some x)
+                          else headAux level xs meilleurScore meilleurMot
 
 
 let head ?level (st : Store.word_store) : word option  =
-  headAux (List.of_seq (Hashtbl.to_seq_values st.words_table)) 0 None (* il trouve pas words_table *))
+  match level with
+  | None -> None
+  | Some l -> if (l = 0) then Some genesis_word else headAux l (List.of_seq (Hashtbl.to_seq_values (st.words_table))) 0 None
+  
+
   

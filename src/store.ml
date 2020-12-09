@@ -5,6 +5,7 @@ type word_store = {
   words_table : (Crypto.hash, word) Hashtbl.t;
 }
 
+
 let init_words ?(check_sigs = true) () : word_store =
   let words_table = Hashtbl.create 200 in
   Hashtbl.add words_table Constants.genesis Constants.genesis_word ;
@@ -50,3 +51,4 @@ let add_letters (st : letter_store) (ls : Letter.t list) =
 let get_letters (st : letter_store) h = Hashtbl.find_all st.letters_table h
 
 let length st = Hashtbl.length st.words_table
+
