@@ -63,11 +63,13 @@ let run ?(max_iter = 0) () =
 
   (* start main loop *)
   let level = ref wordpool.current_period in
+  Log.log_info "AUTHOR LEVEL %i" !level;
   let rec loop max_iter =
     if max_iter = 0 then ()
     else (
       ( match Client_utils.receive () with
       | Messages.Inject_word w ->
+          Log.log_info "RECEIVED INJECT WORD" ;
           Store.add_word store w ;
           Option.iter
             (fun head ->
@@ -76,7 +78,9 @@ let run ?(max_iter = 0) () =
                 send_new_letter sk pk !level store )
               else Log.log_info "incoming word %a not a new head@." Word.pp w)
             (Consensus.head ~level:(!level - 1) store)
-      | Messages.Next_turn p -> level := p
+      | Messages.Next_turn p -> 
+          Log.log_info "RECEIVED NEXT TURN" ;
+          level := p ; send_new_letter sk pk !level store ;
       | Messages.Inject_letter _ | _ -> () ) ;
       loop (max_iter - 1) )
   in

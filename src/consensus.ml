@@ -58,7 +58,9 @@ let rec headAux (level:int) (words : word list) (meilleurScore : int) (meilleurM
   match words with
   | [] -> meilleurMot
   | (x::xs) -> let newScore = word_score x in
-               if (level = x.level) && ((word_score x) > meilleurScore) 
+              Log.log_info "IN CONSENSUS HEAD AUX %i" level ;
+              Log.log_info "CONSENSUS MOT %a" Word.pp x ;
+               if (level = x.level) && ((word_score x) >= meilleurScore) 
                           then headAux level xs newScore (Some x)
                           else headAux level xs meilleurScore meilleurMot
 
