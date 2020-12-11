@@ -10,7 +10,7 @@ let make_letter_on_block sk pk level block letter : letter =
   make_letter_on_hash sk pk level head_hash letter
 
 (* we remove non-alphabetical caracters and uppercase caracters *)
-let random_char () = Random.int (122 - 97) + 97 |> Char.chr
+let random_char () = (*Random.int (122 - 97) + 97*) 103 |> Char.chr
 
 let send_new_letter sk pk level store =
   (* Get blockchain head *)
@@ -74,6 +74,8 @@ let run ?(max_iter = 0) () =
           Store.add_word store w ;
           Option.iter
             (fun head ->
+              Log.log_info "current head : %a@."  Word.pp head;
+              Log.log_info "current LEVEL : %i@."  !level;
               if head = w then (
                 Log.log_info "Head updated to incoming word %a@." Word.pp w ;
                 send_new_letter sk pk !level store )
@@ -81,7 +83,7 @@ let run ?(max_iter = 0) () =
             (Consensus.head ~level:(!level - 1) store)
       | Messages.Next_turn p -> 
           Log.log_info "RECEIVED NEXT TURN" ;
-          level := p ; send_new_letter sk pk !level store ;
+          level := p ; (*send_new_letter sk pk !level store ;*)
       | Messages.Inject_letter _ | _ -> () ) ;
       loop (max_iter - 1) )
   in
