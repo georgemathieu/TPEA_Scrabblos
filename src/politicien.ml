@@ -3,15 +3,31 @@ open Word
 open Crypto
 open Letter
 
+(* print a list of letter, used for debug *)
 let rec print_letter_list (l : letter list) =
   match l with
   | [] -> print_string " "
   | x::xs -> print_char x.letter ; print_letter_list xs
 
+(* casts a string to a char list*))
+let string_to_char_list (str : string) : char list = str |> String.to_seq |> List.of_seq
+
+(* the list of dictionnary used *)
 let dictionnaryList = [Client_utils.list_of_dict "dict/dict_100000_1_10.txt" ; Client_utils.list_of_dict "dict/dict_100000_5_15.txt";
                        Client_utils.list_of_dict "dict/dict_100000_25_75.txt" ; Client_utils.list_of_dict "dict/dict_100000_50_200.txt"]
 
-let get_dictionnary (i : int) = List.nth dictionnaryList i
+(* get a dictionnary from the list *))
+let get_dictionnary (i : int) : string list = List.nth dictionnaryList i
+
+let check_word_in_dict_aux (dico : string list) (lStore : letter list) : letter list option =
+  match dico with
+  | [] -> None
+  | x::xs -> None
+
+let check_word_in_dict (lStore : letter list) : letter list option =
+  let l = List.length lStore in
+  if (1 < l) && (l < 5) then check_word_in_dict_aux (get_dictionnary 1) lStore
+  else None
 
 type politician = { sk : Crypto.sk; pk : Crypto.pk } [@@deriving yojson, show]
 
@@ -41,6 +57,25 @@ let make_word_on_blockletters level letters politician head : word =
   Log.log_info "IN MAKE WORD BLOCK" ;
   make_word_on_hash level letters politician head_hash
 
+(* fonction auxiliaire pour check_letters_one_per_author *)
+let rec check_letters_one_per_author_aux (lStore : letter list) (author : Id.author_id) : letter list = 
+  match lStore with
+  | [] -> []
+  | x::xs -> if (x.author = author) then check_letters_one_per_author_aux xs author else x::(check_letters_one_per_author_aux xs author)
+
+(* Supprime les lettres qui appartiennent au meme auteur*)
+let rec check_letters_one_per_author (lStore : letter list) : letter list =
+  match lStore with
+  | [] -> []
+  | x::xs -> x::(check_letters_one_per_author (check_letters_one_per_author_aux xs x.author))
+
+(* Supprime les lettres qui n'ont pas la meme reference au mot predecesseur *)
+let rec check_letters_same_hash (word : word) (lStore : letter list) : letter list =
+  match lStore with
+  | [] -> lStore
+  | x::xs -> if (word.head = x.head) then x::(check_letters_same_hash word xs)
+                                     else check_letters_same_hash word xs
+
 let send_new_word st level =
   (* generate a word above the blockchain head, with the adequate letters *)
   (* then send it to the server *)
@@ -51,6 +86,8 @@ let send_new_word st level =
       let lettersFromStore = (List.of_seq (Hashtbl.to_seq_values st.letter_store.letters_table))  in
       Log.log_info "HERE FROM STORE : ";
       print_letter_list lettersFromStore ;
+      (*Créer le mot *)
+
       let word = make_word_on_blockletters level lettersFromStore st.politician (Word.to_bigstring head) in
       Store.add_word st.word_store word ;
       let message = Messages.Inject_word word in
