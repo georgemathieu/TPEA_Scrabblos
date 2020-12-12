@@ -43,7 +43,6 @@ let word_score (word : word) : int =
   
 
 let fitness st word =
-(* score àchaque mot de la chaine*)
   (* ignoring unused variables - to be removed *)
   ignore st ;
   ignore word ;

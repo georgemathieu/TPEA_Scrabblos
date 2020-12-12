@@ -42,18 +42,33 @@ let rec check_dict_word_valid (w : char list) (lStore : letter list) (word : let
               
 
 (* Recupere un mot dans le dictionnaire en utilisant le contenu du letter store *)
-let rec get_word_from_dict_aux (dico : string list) (lStore : letter list) : letter list option =
+let rec get_word_from_dict_aux (dico : string list) (lStore : letter list) (longestWord : letter list) : letter list =
   (* Log.log_info "IN GET WORD FROM DICT AUX @." ; *)
   match dico with
-  | [] -> None
+  | [] -> longestWord
   | x::xs -> match check_dict_word_valid (string_to_char_list x) lStore [] with
-              | None -> (* Log.log_info "WORD NOT VALID @." ;*) get_word_from_dict_aux xs lStore
-              | Some l -> (*Log.log_info "FOUND WORD @." ;*) Some l
+              | None -> (* Log.log_info "WORD NOT VALID @." ;*) get_word_from_dict_aux xs lStore longestWord
+              | Some l -> (*Log.log_info "FOUND WORD @." ;*) 
+                      if ((List.length l) = (List.length lStore)) then l else
+                        if (List.length l) > (List.length longestWord) 
+                              then get_word_from_dict_aux xs lStore l
+                              else get_word_from_dict_aux xs lStore longestWord
+
+(* Recupere un mot en cherchant dans tous les dico inferieurs si aucun mot est trouve dans un dico superieur *)
+let rec get_dictionnary_aux (dicoNumber : int) (lStore : letter list) : letter list option =
+match dicoNumber with
+| _ when dicoNumber < 0 -> None
+| x -> match get_word_from_dict_aux (get_dictionnary x) lStore [] with
+      | [] -> get_dictionnary_aux (x - 1) lStore
+      | liste -> Some liste
 
 (* Choisis le dictionnaire à utiliser pour construire un mot à partir du letter store *)
 let get_word_from_dict (lStore : letter list) : letter list option =
   let l = List.length lStore in
-  if (1 < l) && (l < 5) then get_word_from_dict_aux (get_dictionnary 0) lStore
+  if (l >= 50) then get_dictionnary_aux 3 lStore 
+  else if (l >= 25) then get_dictionnary_aux 2 lStore
+  else if (l >= 5) then get_dictionnary_aux 1 lStore
+  else if (l >= 1) then get_dictionnary_aux 0 lStore
   else None
 
 type politician = { sk : Crypto.sk; pk : Crypto.pk } [@@deriving yojson, show]
@@ -122,7 +137,7 @@ let send_new_word st level =
       Log.log_info "@.";
 
       (*Créer le mot *)
-      let same_level_letters = deletes_letters_from_old_level store_letters level in
+      let same_level_letters = deletes_letters_from_old_level store_letters (level-1) in
       Log.log_info "STORE CONTENT AFTER SAME LEVEL CLEANING : @.";
       print_letter_list same_level_letters ;
       Log.log_info "@.";
@@ -156,11 +171,15 @@ let run ?(max_iter = 0) () =
   (* Get initial wordpool *)
   let getpool = Messages.Get_full_wordpool in
     Client_utils.send_some getpool ;
-  let wordpool =
+    let rec wait_wordpool () : Messages.wordpool =
     match Client_utils.receive () with
     | Messages.Full_wordpool wordpool -> wordpool
-    | _ -> assert false
+    | Messages.Diff_wordpool diff_wp -> diff_wp.wordpool
+    | _ -> wait_wordpool ()
   in
+
+  (* we use wait functions in case we don't receive the correct message directly *)
+  let wordpool = wait_wordpool () in
 
   (* Generate initial blocktree *)
   let wStore = Store.init_words () in
@@ -169,11 +188,14 @@ let run ?(max_iter = 0) () =
   (* Get initial letterpool *)
   let getlpool = Messages.Get_full_letterpool in
     Client_utils.send_some getlpool ;
-  let lpool =
+  let rec wait_lpool () : Messages.letterpool =
     match Client_utils.receive () with
       | Messages.Full_letterpool letterpool -> letterpool
-      | _ -> assert false
+      | Messages.Diff_letterpool diff_lp -> diff_lp.letterpool
+      | _ -> wait_lpool ()
   in
+
+  let lpool = wait_lpool () in
 
   (* Generate initial letterpool *)
   let lStore = Store.init_letters () in
@@ -195,26 +217,13 @@ let run ?(max_iter = 0) () =
       | Messages.Inject_word w ->
           Log.log_info "RECEIVED INJECT WORD@." ;
           Store.add_word wStore w ;
-          (*Option.iter
-            (fun head ->
-              if head = w then (
-                Log.log_info "Head updated to incoming word %a@." Word.pp w ;
-                send_new_word state !level )
-              else Log.log_info "incoming word %a not a new head@." Word.pp w)
-            (Consensus.head ~level:(!level - 1) wStore) *)
       | Messages.Next_turn p -> 
           Log.log_info "RECEIVED NEXT TURN@." ;
           level := p; 
+          send_new_word state !level
       | Messages.Inject_letter l ->
           Log.log_info "RECEIVED INJECT LETTER@." ;
           Store.add_letter lStore l ;
-          Option.iter
-            (fun head ->
-              (* (to avoid unused variable head) *)
-              (* Log.log_info "Current head  :  %a@." Word.pp head ; *)
-              ignore head;
-              send_new_word state !level)
-            (Consensus.head ~level:(!level - 1) wStore)
       | _ -> () ) ; (* To avoid non exhaustive pattern matching*)
       loop (max_iter - 1) )
   in

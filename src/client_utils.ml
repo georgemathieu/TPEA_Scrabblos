@@ -64,7 +64,7 @@ let list_of_dict (fname : string) =
   let lines = ref [] in
   try
     while true do
-      lines := !lines :: input_line ic
+      lines := input_line ic :: !lines
     done ;
     !lines
   with End_of_file ->

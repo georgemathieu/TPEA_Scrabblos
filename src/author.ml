@@ -40,18 +40,27 @@ let run ?(max_iter = 0) () =
   Client_utils.send_some reg_msg ;
 
   (* drop provided letter_bag *)
-  ( match Client_utils.receive () with
+  let rec wait_lbag () =
+  match Client_utils.receive () with
   | Messages.Letters_bag _ -> ()
-  | _ -> assert false ) ;
+  | _ -> wait_lbag ()
+  in
+  
+  (* we use wait functions in case we don't receive the correct message directly *)
+  let lbag = wait_lbag () in
+  ignore lbag;
 
   (* Get initial wordpool *)
   let getpool = Messages.Get_full_wordpool in
   Client_utils.send_some getpool ;
-  let wordpool =
+  let rec wait_wordpool () : Messages.wordpool =
     match Client_utils.receive () with
     | Messages.Full_wordpool wordpool -> wordpool
-    | _ -> assert false
+    | Messages.Diff_wordpool diff_wp -> diff_wp.wordpool
+    | _ -> wait_wordpool ()
   in
+
+  let wordpool = wait_wordpool () in
 
   (* Generate initial blocktree *)
   let store = Store.init_words () in
