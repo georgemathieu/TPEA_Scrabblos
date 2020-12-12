@@ -35,7 +35,7 @@ let lettre_score l : int =
 
 let rec aux (wordContent : letter list) res : int =
   match wordContent with
-  | [] -> 0
+  | [] -> res
   | (x::xs) -> aux xs (res + (lettre_score x))
 
 let word_score (word : word) : int =
@@ -55,18 +55,28 @@ let fitness st word =
 (* TODO *)
 
 let rec headAux (level:int) (words : word list) (meilleurScore : int) (meilleurMot : word option) : word option = 
+  (* Log.log_info "CURRENT BEST SCORE%i@." meilleurScore; *)
   match words with
   | [] -> meilleurMot
   | (x::xs) -> let newScore = word_score x in
-               if (level = x.level) && ((word_score x) >= meilleurScore) 
+                (* Log.log_info "NEW SCORE %i@." newScore;
+                Log.log_info "NEW WORD%a@." Word.pp x; *)
+               if (level = x.level) && ((word_score x) > meilleurScore) 
                           then headAux level xs newScore (Some x)
                           else headAux level xs meilleurScore meilleurMot
 
 
+let rec get_latest_period (words : word list) (latestPeriod : int) : int =
+  match words with
+  | [] -> latestPeriod
+  | x::xs -> if x.level > latestPeriod then get_latest_period xs x.level else get_latest_period xs latestPeriod
+
+
 let head ?level (st : Store.word_store) : word option  =
-  match level with
-  | None -> None
-  | Some l -> if (l = 0) then Some genesis_word else headAux l (List.of_seq (Hashtbl.to_seq_values (st.words_table))) 0 None
+  match (List.of_seq (Hashtbl.to_seq_values (st.words_table))), level with
+  | _,None -> None
+  | [], _ -> Log.log_info "EMPTY WORD STORE@." ; Some genesis_word
+  | liste, Some l -> ignore l; (*Log.log_info "GETTING BEST WORD@." ;*) headAux (get_latest_period liste 0) liste 0 (Some genesis_word)
   
 
   

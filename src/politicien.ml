@@ -3,6 +3,8 @@ open Word
 open Crypto
 open Letter
 
+let newline = 13 |> Char.chr
+
 (* print a list of letter, used for debug *)
 let rec print_letter_list (l : letter list) =
   match l with
@@ -22,34 +24,36 @@ let get_dictionnary (i : int) : string list = List.nth dictionnaryList i
 
 (* Vérifie que la lettre courante est dans le letter store *)
 let rec check_letter_in_store (c : char) (lStore : letter list) : letter option =
-  Log.log_info "IN CHECK LETTER IN STORE @." ;
+  (* Log.log_info "IN CHECK LETTER IN STORE @." ; *)
   match lStore with
-  | [] -> None
+  | [] -> (* Log.log_info "EMPTY LETTER STORE @." ; *) None
   | x::xs -> if (x.letter = c) then Some x else check_letter_in_store c xs
 
 (* Vérifie que le mot courant a toutes ses lettres dans le letter store *)
 let rec check_dict_word_valid (w : char list) (lStore : letter list) (word : letter list) : letter list option =
-  Log.log_info "IN CHECK DICT WORD VALID @." ;
+  (* Log.log_info "IN CHECK DICT WORD VALID @." ;
+  print_letter_list word; *)
   match w with
   | [] -> Some word
-  | x::xs -> match (check_letter_in_store x lStore) with
+  | x::xs -> (*Log.log_info "CURRENT CHAR : %i@." (Char.code x) ;*)  if (x = newline) then Some word else 
+              match (check_letter_in_store x lStore) with
               | None -> None
               | Some z -> check_dict_word_valid xs (List.filter (fun (a:letter) -> if a = z then false else true) lStore) (word@[z])
               
 
 (* Recupere un mot dans le dictionnaire en utilisant le contenu du letter store *)
 let rec get_word_from_dict_aux (dico : string list) (lStore : letter list) : letter list option =
-  Log.log_info "IN GET WORD FROM DICT AUX @." ;
+  (* Log.log_info "IN GET WORD FROM DICT AUX @." ; *)
   match dico with
   | [] -> None
   | x::xs -> match check_dict_word_valid (string_to_char_list x) lStore [] with
-              | None -> get_word_from_dict_aux xs lStore
-              | Some l -> Some l
+              | None -> (* Log.log_info "WORD NOT VALID @." ;*) get_word_from_dict_aux xs lStore
+              | Some l -> (*Log.log_info "FOUND WORD @." ;*) Some l
 
 (* Choisis le dictionnaire à utiliser pour construire un mot à partir du letter store *)
 let get_word_from_dict (lStore : letter list) : letter list option =
   let l = List.length lStore in
-  if (1 < l) && (l < 5) then get_word_from_dict_aux (get_dictionnary 4) lStore
+  if (1 < l) && (l < 5) then get_word_from_dict_aux (get_dictionnary 0) lStore
   else None
 
 type politician = { sk : Crypto.sk; pk : Crypto.pk } [@@deriving yojson, show]
@@ -72,12 +76,12 @@ let make ~(politicien : politician) ~(word : letter list) ~(head : hash) ~(level
 
 let make_word_on_hash level letters politician head_hash : word =
   let head = head_hash in
-  Log.log_info "IN MAKE WORD HASH@." ;
+  (*Log.log_info "IN MAKE WORD HASH@." ;*)
   make ~word:letters ~level ~politicien:politician ~head
 
 let make_word_on_blockletters level letters politician head : word =
   let head_hash = Crypto.hash head in
-  Log.log_info "IN MAKE WORD BLOCK@." ;
+  (* Log.log_info "IN MAKE WORD BLOCK@." ;*)
   make_word_on_hash level letters politician head_hash
 
 (* fonction auxiliaire pour check_letters_one_per_author *)
@@ -87,10 +91,18 @@ let rec check_letters_one_per_author_aux (lStore : letter list) (author : Id.aut
   | x::xs -> if (x.author = author) then check_letters_one_per_author_aux xs author else x::(check_letters_one_per_author_aux xs author)
 
 (* Supprime les lettres qui appartiennent au meme auteur*)
+(* A modifier pour roue libre *)
 let rec check_letters_one_per_author (lStore : letter list) : letter list =
   match lStore with
   | [] -> []
   | x::xs -> x::(check_letters_one_per_author (check_letters_one_per_author_aux xs x.author))
+
+(* Supprime les lettres non utilisees d'un ancien niveau *)
+let rec deletes_letters_from_old_level (lStore : letter list) (level : int) : letter list =
+  match lStore with
+  | [] -> []
+  | x::xs -> if x.level < level then deletes_letters_from_old_level xs level
+                                else x::(deletes_letters_from_old_level xs level)
 
 (* Supprime les lettres qui n'ont pas la meme reference au mot predecesseur *)
 let rec check_letters_same_hash (word : word) (lStore : letter list) : letter list =
@@ -102,24 +114,32 @@ let rec check_letters_same_hash (word : word) (lStore : letter list) : letter li
 let send_new_word st level =
   (* generate a word above the blockchain head, with the adequate letters *)
   (* then send it to the server *)
-  Log.log_info "HERE SEND LEVEL %i@." level ;
   Option.iter
     (fun (head:word) ->
       let store_letters = (List.of_seq (Hashtbl.to_seq_values st.letter_store.letters_table))  in
       Log.log_info "STORE CONTENT IN SEND NEW WORD : @.";
       print_letter_list store_letters ;
       Log.log_info "@.";
+
       (*Créer le mot *)
-      let same_hash_letters = check_letters_same_hash head store_letters in
+      let same_level_letters = deletes_letters_from_old_level store_letters level in
+      Log.log_info "STORE CONTENT AFTER SAME LEVEL CLEANING : @.";
+      print_letter_list same_level_letters ;
+      Log.log_info "@.";
+
+      let same_hash_letters = check_letters_same_hash head same_level_letters in
       Log.log_info "STORE CONTENT AFTER SAME HASH CLEANING : @.";
       print_letter_list same_hash_letters ;
       Log.log_info "@.";
+
       let final_letter_store = check_letters_one_per_author same_hash_letters in
       Log.log_info "STORE CONTENT AFTER ONE PER AUTHOR CLEANING : @.";
       print_letter_list final_letter_store ;
       Log.log_info "@.";
+
       match get_word_from_dict final_letter_store with
         | Some word_from_dico -> let word = make_word_on_blockletters level word_from_dico st.politician (Word.to_bigstring head) in
+                    Log.log_info "SENDING WORD AT LEVEL %i@." level ;
                     Store.add_word st.word_store word ;
                     let message = Messages.Inject_word word in
                     Client_utils.send_some message
@@ -133,13 +153,9 @@ let run ?(max_iter = 0) () =
   (* Generate public/secret keys *)
   let (pk, sk) = Crypto.genkeys () in
 
-  Log.log_info "POLITICIEN TEST" ;
-
   (* Get initial wordpool *)
   let getpool = Messages.Get_full_wordpool in
-    Log.log_info "BEFORE woordpool" ;
     Client_utils.send_some getpool ;
-    Log.log_info "AFTER WORDPOOL woordpool" ;
   let wordpool =
     match Client_utils.receive () with
     | Messages.Full_wordpool wordpool -> wordpool
@@ -149,8 +165,6 @@ let run ?(max_iter = 0) () =
   (* Generate initial blocktree *)
   let wStore = Store.init_words () in
     Store.add_words wStore wordpool.words ;
-  
-  Log.log_info "reached woordpool" ;
 
   (* Get initial letterpool *)
   let getlpool = Messages.Get_full_letterpool in
@@ -165,15 +179,12 @@ let run ?(max_iter = 0) () =
   let lStore = Store.init_letters () in
     Store.add_letters lStore lpool.letters ;
 
-  Log.log_info "reached letterpool" ;
-
   (* Create and send first word *)
   let pol = {sk ; pk} in
   let state = {politician=pol ; word_store=wStore ; letter_store=lStore ; next_words=[]} in
   send_new_word state wordpool.current_period ;
   
   (* start listening to server messages *)
-  Log.log_info "reached before listen to server" ;
   Client_utils.send_some Messages.Listen ;
   (*  main loop *)
   let level = ref wordpool.current_period in
@@ -194,15 +205,16 @@ let run ?(max_iter = 0) () =
       | Messages.Next_turn p -> 
           Log.log_info "RECEIVED NEXT TURN@." ;
           level := p; 
-          Option.iter
-            (fun head ->
-              (* (to avoid unused variable head) *)
-              Log.log_info "Current head  :  %a@." Word.pp head ;
-              send_new_word state (!level))
-            (Consensus.head ~level:(!level - 1) wStore)
       | Messages.Inject_letter l ->
           Log.log_info "RECEIVED INJECT LETTER@." ;
           Store.add_letter lStore l ;
+          Option.iter
+            (fun head ->
+              (* (to avoid unused variable head) *)
+              (* Log.log_info "Current head  :  %a@." Word.pp head ; *)
+              ignore head;
+              send_new_word state !level)
+            (Consensus.head ~level:(!level - 1) wStore)
       | _ -> () ) ; (* To avoid non exhaustive pattern matching*)
       loop (max_iter - 1) )
   in
@@ -212,6 +224,6 @@ let _ =
   let main =
     Random.self_init () ;
     let () = Client_utils.connect () in
-    run ~max_iter:(20) ()
+    run ~max_iter:(-1) ()
   in
   main
