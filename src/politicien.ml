@@ -14,19 +14,22 @@ let string_to_char_list (str : string) : char list = str |> String.to_seq |> Lis
 
 (* the list of dictionnary used *)
 let dictionnaryList = [Client_utils.list_of_dict "dict/dict_100000_1_10.txt" ; Client_utils.list_of_dict "dict/dict_100000_5_15.txt";
-                       Client_utils.list_of_dict "dict/dict_100000_25_75.txt" ; Client_utils.list_of_dict "dict/dict_100000_50_200.txt"]
+                       Client_utils.list_of_dict "dict/dict_100000_25_75.txt" ; Client_utils.list_of_dict "dict/dict_100000_50_200.txt";
+                       Client_utils.list_of_dict "dict/dict_test.txt"]
 
 (* get a dictionnary from the list *)
 let get_dictionnary (i : int) : string list = List.nth dictionnaryList i
 
 (* Vérifie que la lettre courante est dans le letter store *)
 let rec check_letter_in_store (c : char) (lStore : letter list) : letter option =
+  Log.log_info "IN CHECK LETTER IN STORE @." ;
   match lStore with
   | [] -> None
   | x::xs -> if (x.letter = c) then Some x else check_letter_in_store c xs
 
 (* Vérifie que le mot courant a toutes ses lettres dans le letter store *)
 let rec check_dict_word_valid (w : char list) (lStore : letter list) (word : letter list) : letter list option =
+  Log.log_info "IN CHECK DICT WORD VALID @." ;
   match w with
   | [] -> Some word
   | x::xs -> match (check_letter_in_store x lStore) with
@@ -36,6 +39,7 @@ let rec check_dict_word_valid (w : char list) (lStore : letter list) (word : let
 
 (* Recupere un mot dans le dictionnaire en utilisant le contenu du letter store *)
 let rec get_word_from_dict_aux (dico : string list) (lStore : letter list) : letter list option =
+  Log.log_info "IN GET WORD FROM DICT AUX @." ;
   match dico with
   | [] -> None
   | x::xs -> match check_dict_word_valid (string_to_char_list x) lStore [] with
@@ -45,7 +49,7 @@ let rec get_word_from_dict_aux (dico : string list) (lStore : letter list) : let
 (* Choisis le dictionnaire à utiliser pour construire un mot à partir du letter store *)
 let get_word_from_dict (lStore : letter list) : letter list option =
   let l = List.length lStore in
-  if (1 < l) && (l < 5) then get_word_from_dict_aux (get_dictionnary 1) lStore
+  if (1 < l) && (l < 5) then get_word_from_dict_aux (get_dictionnary 4) lStore
   else None
 
 type politician = { sk : Crypto.sk; pk : Crypto.pk } [@@deriving yojson, show]
@@ -68,12 +72,12 @@ let make ~(politicien : politician) ~(word : letter list) ~(head : hash) ~(level
 
 let make_word_on_hash level letters politician head_hash : word =
   let head = head_hash in
-  Log.log_info "IN MAKE WORD HASH" ;
+  Log.log_info "IN MAKE WORD HASH@." ;
   make ~word:letters ~level ~politicien:politician ~head
 
 let make_word_on_blockletters level letters politician head : word =
   let head_hash = Crypto.hash head in
-  Log.log_info "IN MAKE WORD BLOCK" ;
+  Log.log_info "IN MAKE WORD BLOCK@." ;
   make_word_on_hash level letters politician head_hash
 
 (* fonction auxiliaire pour check_letters_one_per_author *)
@@ -92,7 +96,7 @@ let rec check_letters_one_per_author (lStore : letter list) : letter list =
 let rec check_letters_same_hash (word : word) (lStore : letter list) : letter list =
   match lStore with
   | [] -> lStore
-  | x::xs -> if (word.head = x.head) then x::(check_letters_same_hash word xs)
+  | x::xs -> if ((Crypto.hash (Word.to_bigstring word)) = x.head) then x::(check_letters_same_hash word xs)
                                      else check_letters_same_hash word xs
 
 let send_new_word st level =
@@ -102,11 +106,18 @@ let send_new_word st level =
   Option.iter
     (fun (head:word) ->
       let store_letters = (List.of_seq (Hashtbl.to_seq_values st.letter_store.letters_table))  in
-      Log.log_info "HERE FROM STORE : @.";
+      Log.log_info "STORE CONTENT IN SEND NEW WORD : @.";
       print_letter_list store_letters ;
+      Log.log_info "@.";
       (*Créer le mot *)
       let same_hash_letters = check_letters_same_hash head store_letters in
+      Log.log_info "STORE CONTENT AFTER SAME HASH CLEANING : @.";
+      print_letter_list same_hash_letters ;
+      Log.log_info "@.";
       let final_letter_store = check_letters_one_per_author same_hash_letters in
+      Log.log_info "STORE CONTENT AFTER ONE PER AUTHOR CLEANING : @.";
+      print_letter_list final_letter_store ;
+      Log.log_info "@.";
       match get_word_from_dict final_letter_store with
         | Some word_from_dico -> let word = make_word_on_blockletters level word_from_dico st.politician (Word.to_bigstring head) in
                     Store.add_word st.word_store word ;
@@ -182,16 +193,16 @@ let run ?(max_iter = 0) () =
             (Consensus.head ~level:(!level - 1) wStore) *)
       | Messages.Next_turn p -> 
           Log.log_info "RECEIVED NEXT TURN@." ;
-          level := p; (*send_new_word state !level ; *)
+          level := p; 
+          Option.iter
+            (fun head ->
+              (* (to avoid unused variable head) *)
+              Log.log_info "Current head  :  %a@." Word.pp head ;
+              send_new_word state (!level))
+            (Consensus.head ~level:(!level - 1) wStore)
       | Messages.Inject_letter l ->
           Log.log_info "RECEIVED INJECT LETTER@." ;
           Store.add_letter lStore l ;
-          Option.iter
-            ( fun head ->
-              (* (to avoid unused variable head) *)
-              Log.log_info "Current head  :  %a@." Word.pp head ;
-              send_new_word state !level)
-            (Consensus.head ~level:(!level - 1) wStore)
       | _ -> () ) ; (* To avoid non exhaustive pattern matching*)
       loop (max_iter - 1) )
   in

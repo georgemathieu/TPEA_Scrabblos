@@ -17,6 +17,7 @@ let send_new_letter sk pk level store =
   Option.iter
     (fun head ->
       (* Create new random letter *)
+      Log.log_info "CURRENT HEAD : %a@." Word.pp head;
       let letter =
         make_letter_on_block
           sk
@@ -70,7 +71,7 @@ let run ?(max_iter = 0) () =
     else (
       ( match Client_utils.receive () with
       | Messages.Inject_word w ->
-          Log.log_info "RECEIVED INJECT WORD" ;
+          Log.log_info "RECEIVED INJECT WORD@." ;
           Store.add_word store w ;
           Option.iter
             (fun head ->
@@ -82,8 +83,8 @@ let run ?(max_iter = 0) () =
               else Log.log_info "incoming word %a not a new head@." Word.pp w)
             (Consensus.head ~level:(!level - 1) store)
       | Messages.Next_turn p -> 
-          Log.log_info "RECEIVED NEXT TURN" ;
-          level := p ; (*send_new_letter sk pk !level store ;*)
+          Log.log_info "RECEIVED NEXT TURN@." ;
+          level := p ;
       | Messages.Inject_letter _ | _ -> () ) ;
       loop (max_iter - 1) )
   in
