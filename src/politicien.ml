@@ -137,7 +137,7 @@ let send_new_word st level =
       Log.log_info "@.";
 
       (*Créer le mot *)
-      let same_level_letters = deletes_letters_from_old_level store_letters (level-1) in
+      let same_level_letters = deletes_letters_from_old_level store_letters (level - 1) in
       Log.log_info "STORE CONTENT AFTER SAME LEVEL CLEANING : @.";
       print_letter_list same_level_letters ;
       Log.log_info "@.";
@@ -160,7 +160,7 @@ let send_new_word st level =
                     Client_utils.send_some message
         | None -> ()
     )
-    (Consensus.head ~level:(level - 1) st.word_store)
+    (Consensus.head ~level:(level) st.word_store)
 
 (* Verifie si le mot reçu est le notre ou non *)
 let check_if_own_word (pk : Id.politician_id) (word : word) : bool =
@@ -224,6 +224,7 @@ let run ?(max_iter = 0) () =
       ( match Client_utils.receive () with
       | Messages.Inject_word w -> (* score := !score + (add_score pk w); *)
           Log.log_info "RECEIVED INJECT WORD@." ;
+          if (!level >= nombre_tours) then Client_utils.send_some Messages.Fin_de_Partie else 
           (match (check_if_own_word pk w) with
           | true -> 
             Option.iter
@@ -233,17 +234,31 @@ let run ?(max_iter = 0) () =
               if head = w then (
                 Log.log_info "Head updated to incoming word %a@." Word.pp w ;
                 score := !score + (Consensus.word_score w);
+                level := (w.level) ; 
                 (* Log.log_info "Current politician score %i@." !score ; *) )
               else Log.log_info "incoming word %a not a new head@." Word.pp w )
-            (Consensus.head ~level:(!level - 1) wStore)
-          | false -> Store.add_word wStore w ;)
+            (Consensus.head ~level:(w.level - 1) wStore)
+          | false -> 
+            Store.add_word wStore w ;
+            Option.iter
+              (fun head ->
+                (* Log.log_info "current head : %a@."  Word.pp head; *)
+                Log.log_info "current LEVEL : %i@."  !level;
+                if head = w then (
+                  Log.log_info "Head updated to incoming word %a@." Word.pp w ;
+                  level := (w.level) ; 
+                  (* Log.log_info "Current politician score %i@." !score ; *) )
+                else Log.log_info "incoming word %a not a new head@." Word.pp w )
+              (Consensus.head ~level:(w.level - 1) wStore) )
       | Messages.Next_turn p -> 
           Log.log_info "RECEIVED NEXT TURN@." ;
           level := p; 
           if (!level = nombre_tours) then Client_utils.send_some Messages.Fin_de_Partie else send_new_word state !level
       | Messages.Inject_letter l ->
           Log.log_info "RECEIVED INJECT LETTER@." ;
-          Store.add_letter lStore l ;
+          Log.log_info "current LEVEL : %i@."  !level;
+          Store.add_letter lStore l ; 
+          if (!level >= nombre_tours) then Client_utils.send_some Messages.Fin_de_Partie else send_new_word state (!level + 1) ;
       | Messages.Fin_de_Partie -> Log.log_info "Final politician score : %i@." !score ; ()
       | _ -> () ) ; (* To avoid non exhaustive pattern matching*)
       loop (max_iter - 1) )

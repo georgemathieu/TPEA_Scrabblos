@@ -34,7 +34,7 @@ let _ =
       ?addr:!addr_ref
       ~port:!port_ref
       ~check_sigs:(not !no_check_sigs_ref)
-      ~turn_by_turn:(not !no_turn_ref)
+      ~turn_by_turn:(!no_turn_ref)
       ~nb_rounds:!nb_rounds_ref
       ?timeout:!timeout_ref
       ()

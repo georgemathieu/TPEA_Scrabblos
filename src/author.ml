@@ -39,6 +39,7 @@ let send_new_letter sk pk level store =
       Client_utils.send_some message)
     (Consensus.head ~level:(level - 1) store)
 
+(* Fonction qui recupere le score d'une lettre et verifie si elle est envoyee par l'auteur *)
 let rec add_score (pk : Id.author_id) (word : letter list) : int = 
   match word with
   | [] -> 0
@@ -88,7 +89,7 @@ let run ?(max_iter = 0) () =
   let nombre_tours = 50 in
 
   (* start main loop *)
-  let level = ref wordpool.current_period in
+  let level = ref 1 in
   Log.log_info "AUTHOR LEVEL %i" !level;
   let rec loop max_iter =
     if max_iter = 0 then ()
@@ -97,6 +98,7 @@ let run ?(max_iter = 0) () =
       | Messages.Inject_word w ->
           Log.log_info "RECEIVED INJECT WORD@." ;
           Store.add_word store w ;
+          if (!level >= nombre_tours) then Client_utils.send_some Messages.Fin_de_Partie else 
           Option.iter
             (fun head ->
               (* Log.log_info "current head : %a@."  Word.pp head; *)
@@ -104,15 +106,17 @@ let run ?(max_iter = 0) () =
               if head = w then (
                 Log.log_info "Head updated to incoming word %a@." Word.pp w ;
                 state.score := !(state.score) + (add_score pk w.word);
+                level := w.level ; 
+                send_new_letter sk pk !level store
                 (* Log.log_info "Current author score %i@." !(state.score) ; *) )
-              else Log.log_info "incoming word %a not a new head@." Word.pp w )
+              else Log.log_info "incoming word %a not a new head@." Word.pp w ; send_new_letter sk pk !level store ;)
             (Consensus.head ~level:(!level - 1) store)
       | Messages.Next_turn p -> 
           Log.log_info "RECEIVED NEXT TURN@." ;
           level := p ; 
-          if (!level = nombre_tours) then Client_utils.send_some Messages.Fin_de_Partie else send_new_letter sk pk !level store
+          if (!level > nombre_tours) then Client_utils.send_some Messages.Fin_de_Partie else send_new_letter sk pk !level store
       | Messages.Fin_de_Partie -> Log.log_info "Final author score : %i@." !(state.score) ; ()
-      | Messages.Inject_letter _ | _ -> () ) ;
+      | Messages.Inject_letter _ | _ -> if (!level = nombre_tours) then Client_utils.send_some Messages.Fin_de_Partie else () ) ;
       loop (max_iter - 1) )
   in
   loop max_iter

@@ -42,7 +42,8 @@ let word_score (word : word) : int =
   aux word.word 0
   
 (* Proof of work : chaine la + longue
-Proof of Stake : un score par block pour determiner le meilleur en cas de fork*)
+Proof of Stake : un score par block pour determiner le meilleur en cas de fork
+Not used yet*)
 let fitness st word =
   (* ignoring unused variables - to be removed *)
   ignore st ;
@@ -51,8 +52,6 @@ let fitness st word =
   (* end ignoring unused variables - to be removed *)
   (* TODO *)
   assert false
-
-(* TODO *)
 
 (* Verifie si toutes les lettres d'un mot ont bien le bon niveau *)
  let rec check_letters_level (level : int) (word : letter list) (valid : bool) : bool =
