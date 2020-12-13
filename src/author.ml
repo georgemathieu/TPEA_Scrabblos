@@ -2,6 +2,14 @@ open Messages
 open Letter
 open Crypto
 
+(* Sructure de l'auteur avec son score et le letter bag
+Le score augmente quand une de ses lettres est utilise dans un mot qui est integre a la chaine
+Le letter bag n'est pas utilise pour le moment *)
+type state = {
+  score : int ref ;
+  letter_bag : char list ;
+}
+
 let make_letter_on_hash sk pk level head_hash letter : letter =
   Letter.make ~letter ~head:head_hash ~level ~pk ~sk
 
@@ -31,6 +39,11 @@ let send_new_letter sk pk level store =
       Client_utils.send_some message)
     (Consensus.head ~level:(level - 1) store)
 
+let rec add_score (pk : Id.author_id) (word : letter list) : int = 
+  match word with
+  | [] -> 0
+  | x::xs -> if pk = x.author then Consensus.lettre_score x else add_score pk xs
+
 let run ?(max_iter = 0) () =
   (* Generate public/secret keys *)
   let (pk, sk) = Crypto.genkeys () in
@@ -42,13 +55,12 @@ let run ?(max_iter = 0) () =
   (* drop provided letter_bag *)
   let rec wait_lbag () =
   match Client_utils.receive () with
-  | Messages.Letters_bag _ -> ()
+  | Messages.Letters_bag letter_bag -> letter_bag
   | _ -> wait_lbag ()
   in
   
   (* we use wait functions in case we don't receive the correct message directly *)
   let lbag = wait_lbag () in
-  ignore lbag;
 
   (* Get initial wordpool *)
   let getpool = Messages.Get_full_wordpool in
@@ -67,6 +79,7 @@ let run ?(max_iter = 0) () =
   Store.add_words store wordpool.words ;
 
   (* Create and send first letter *)
+  let state = {score=ref 0 ; letter_bag=lbag} in
   send_new_letter sk pk wordpool.current_period store ;
 
   (* start listening to server messages *)
@@ -88,7 +101,8 @@ let run ?(max_iter = 0) () =
               Log.log_info "current LEVEL : %i@."  !level;
               if head = w then (
                 Log.log_info "Head updated to incoming word %a@." Word.pp w ;
-                (*send_new_letter sk pk !level store *))
+                state.score := !(state.score) + (add_score pk w.word);
+                Log.log_info "Current author score %i@." !(state.score) ;)
               else Log.log_info "incoming word %a not a new head@." Word.pp w )
             (Consensus.head ~level:(!level - 1) store)
       | Messages.Next_turn p -> 

@@ -161,8 +161,10 @@ let send_new_word st level =
         | None -> ()
     )
     (Consensus.head ~level:(level - 1) st.word_store)
-  
-  
+
+(* Verifie si le mot reçu est le notre ou non *)
+let check_if_own_word (pk : Id.politician_id) (word : word) : bool =
+  if (word.politician = pk) then true else false
 
 let run ?(max_iter = 0) () =
   (* Generate public/secret keys *)
@@ -208,15 +210,31 @@ let run ?(max_iter = 0) () =
   
   (* start listening to server messages *)
   Client_utils.send_some Messages.Listen ;
+
+  (* Score du politicien qui augmente si ses mots sont integrés à la chaine *)
+  let score = ref 0 in
+
   (*  main loop *)
   let level = ref wordpool.current_period in
   let rec loop max_iter =
     if max_iter = 0 then ()
     else (
       ( match Client_utils.receive () with
-      | Messages.Inject_word w ->
+      | Messages.Inject_word w -> (* score := !score + (add_score pk w); *)
           Log.log_info "RECEIVED INJECT WORD@." ;
-          Store.add_word wStore w ;
+          (match (check_if_own_word pk w) with
+          | true -> 
+            Option.iter
+            (fun head ->
+              (* Log.log_info "current head : %a@."  Word.pp head; *)
+              Log.log_info "current LEVEL : %i@."  !level;
+              if head = w then (
+                Log.log_info "Head updated to incoming word %a@." Word.pp w ;
+                score := !score + (Consensus.word_score w);
+                Log.log_info "Current politician score %i@." !score ;)
+              else Log.log_info "incoming word %a not a new head@." Word.pp w )
+            (Consensus.head ~level:(!level - 1) wStore)
+          | false -> Store.add_word wStore w ;)
       | Messages.Next_turn p -> 
           Log.log_info "RECEIVED NEXT TURN@." ;
           level := p; 

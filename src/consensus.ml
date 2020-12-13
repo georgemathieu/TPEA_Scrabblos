@@ -41,7 +41,8 @@ let rec aux (wordContent : letter list) res : int =
 let word_score (word : word) : int =
   aux word.word 0
   
-
+(* Proof of work : chaine la + longue
+Proof of Stake : un score par block pour determiner le meilleur en cas de fork*)
 let fitness st word =
   (* ignoring unused variables - to be removed *)
   ignore st ;
@@ -53,6 +54,21 @@ let fitness st word =
 
 (* TODO *)
 
+(* Verifie si toutes les lettres d'un mot ont bien le bon niveau *)
+ let rec check_letters_level (level : int) (word : letter list) (valid : bool) : bool =
+  match word, valid with
+  | _, false -> false
+  | [], true -> true
+  | x::xs,true -> check_letters_level level xs (level = x.level) 
+
+(* Verifie que toutes les lettres d'un mot ont une signature coherente *)
+let rec check_letters_signature (word : letter list) (valid : bool) : bool =
+  match word, valid with
+  | _, false -> false
+  | [],true -> true
+  | x::xs,true -> check_letters_signature xs (check_signature x)
+
+(* fonction de verification du consensus *)
 let rec headAux (level:int) (words : word list) (meilleurScore : int) (meilleurMot : word option) : word option = 
   (* Log.log_info "CURRENT BEST SCORE%i@." meilleurScore; *)
   match words with
@@ -60,7 +76,8 @@ let rec headAux (level:int) (words : word list) (meilleurScore : int) (meilleurM
   | (x::xs) -> let newScore = word_score x in
                 (* Log.log_info "NEW SCORE %i@." newScore;
                 Log.log_info "NEW WORD%a@." Word.pp x; *)
-               if (level = x.level) && ((word_score x) > meilleurScore) 
+               if (check_letters_signature x.word true) && (check_letters_level (level-1) x.word true) &&
+               (level = x.level) && ((word_score x) > meilleurScore) 
                           then headAux level xs newScore (Some x)
                           else headAux level xs meilleurScore meilleurMot
 
