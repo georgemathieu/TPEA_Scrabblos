@@ -89,7 +89,7 @@ let run ?(max_iter = 0) () =
   let nombre_tours = 50 in
 
   (* start main loop *)
-  let level = ref 1 in
+  let level = ref wordpool.current_period in
   Log.log_info "AUTHOR LEVEL %i" !level;
   let rec loop max_iter =
     if max_iter = 0 then ()
