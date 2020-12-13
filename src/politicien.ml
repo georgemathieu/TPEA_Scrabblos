@@ -213,6 +213,8 @@ let run ?(max_iter = 0) () =
 
   (* Score du politicien qui augmente si ses mots sont integrés à la chaine *)
   let score = ref 0 in
+  
+  let nombre_tours = 50 in
 
   (*  main loop *)
   let level = ref wordpool.current_period in
@@ -231,17 +233,18 @@ let run ?(max_iter = 0) () =
               if head = w then (
                 Log.log_info "Head updated to incoming word %a@." Word.pp w ;
                 score := !score + (Consensus.word_score w);
-                Log.log_info "Current politician score %i@." !score ;)
+                (* Log.log_info "Current politician score %i@." !score ; *) )
               else Log.log_info "incoming word %a not a new head@." Word.pp w )
             (Consensus.head ~level:(!level - 1) wStore)
           | false -> Store.add_word wStore w ;)
       | Messages.Next_turn p -> 
           Log.log_info "RECEIVED NEXT TURN@." ;
           level := p; 
-          send_new_word state !level
+          if (!level = nombre_tours) then Client_utils.send_some Messages.Fin_de_Partie else send_new_word state !level
       | Messages.Inject_letter l ->
           Log.log_info "RECEIVED INJECT LETTER@." ;
           Store.add_letter lStore l ;
+      | Messages.Fin_de_Partie -> Log.log_info "Final politician score : %i@." !score ; ()
       | _ -> () ) ; (* To avoid non exhaustive pattern matching*)
       loop (max_iter - 1) )
   in

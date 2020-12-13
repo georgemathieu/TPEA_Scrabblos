@@ -41,6 +41,7 @@ type message =
   | Inject_letter of letter
   | Inject_word of word
   | Inject_raw_op of bytes
+  | Fin_de_Partie
 [@@deriving yojson, show]
 
 val receive : ?verbose:bool -> Unix.file_descr -> (message, string) result

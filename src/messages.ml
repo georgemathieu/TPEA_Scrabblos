@@ -42,6 +42,7 @@ type message =
   | Inject_letter of letter
   | Inject_word of word
   | Inject_raw_op of bytes
+  | Fin_de_Partie
 [@@deriving show]
 
 type register_msg = { register : author_id } [@@deriving yojson]
@@ -83,6 +84,8 @@ type inject_word_msg = { inject_word : word } [@@deriving yojson]
 
 type inject_raw_op_msg = { inject_raw_op : bytes } [@@deriving yojson]
 
+type fin_de_partie_msg = { fin_de_partie : unit } [@@deriving yojson]
+
 let register_to_message { register = x } = Register x
 
 let next_turn_to_message { next_turn = x } = Next_turn x
@@ -120,6 +123,10 @@ let inject_word_to_message { inject_word = x } = Inject_word x
 
 let inject_raw_op_to_message { inject_raw_op = x } = Inject_raw_op x
 
+let fin_de_partie_to_message { fin_de_partie = () } = Fin_de_Partie
+
+
+
 let message_to_yojson msg =
   match msg with
   | Register x -> [%to_yojson: register_msg] { register = x }
@@ -149,6 +156,7 @@ let message_to_yojson msg =
   | Inject_letter x -> [%to_yojson: inject_letter_msg] { inject_letter = x }
   | Inject_word x -> [%to_yojson: inject_word_msg] { inject_word = x }
   | Inject_raw_op x -> [%to_yojson: inject_raw_op_msg] { inject_raw_op = x }
+  | Fin_de_Partie -> [%to_yojson: fin_de_partie_msg] { fin_de_partie = () }
 
 let message_of_yojson msg =
   (msg, Error "")
@@ -171,6 +179,7 @@ let message_of_yojson msg =
   ||? ([%of_yojson: inject_letter_msg] >|> inject_letter_to_message)
   ||? ([%of_yojson: inject_word_msg] >|> inject_word_to_message)
   ||? ([%of_yojson: inject_raw_op_msg] >|> inject_raw_op_to_message)
+  ||? ([%of_yojson: fin_de_partie_msg] >|> fin_de_partie_to_message)
   |> snd
 
 let receive ?(verbose = true) in_ch : (message, string) result =

@@ -135,4 +135,5 @@ let answer (st : Netpool.worker_state) (msg : (Messages.message, string) result)
       | Full_letterpool _ -> log_unexpected_message msg
       | Diff_letterpool _ -> log_unexpected_message msg
       | Full_wordpool _ -> log_unexpected_message msg
-      | Diff_wordpool _ -> log_unexpected_message msg )
+      | Diff_wordpool _ -> log_unexpected_message msg 
+      | Fin_de_Partie -> broadcast st.netpoolos.broadcastpoolos msg)
